@@ -1,1 +1,1 @@
-# p8105_hw6_yj2622
+This repo contains solutions for homework 6 of p8105.
