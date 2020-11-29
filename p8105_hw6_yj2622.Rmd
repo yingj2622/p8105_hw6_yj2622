@@ -8,6 +8,7 @@ output: github_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(modelr)
+library(purrr)
 ```
 
 ## Problem 1
@@ -89,5 +90,102 @@ models_results_df %>%
   geom_point() +
   geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) +
   theme(axis.text.x = element_text(angle = 70, hjust = 1))
+```
+
+## Problem 2
+
+import dataset
+
+```{r}
+bwt_data = read_csv("./data/birthweight.csv")
+```
+
+tidy dataset
+
+```{r}
+bwt_df = 
+bwt_data %>% 
+  mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(babysex),
+    malform = as.factor(babysex),
+    mrace = as.factor(babysex)
+  )
+```
+
+inspect NAs
+
+```{r}
+bwt_df %>% 
+  sapply(., function(x) sum(is.na(x)))
+```
+
+There is no NAs in this dataset
+
+Then I try to build a linear model based on the dataset, which examines the association between baby birth weight and mother's pre-pregnancy BMI, age and average number of cigarettes she smokes per day during pregnancy.
+
+```{r}
+mod = lm(bwt ~ ppbmi + momage + smoken, data = bwt_df)
+
+bwt_df %>% 
+  select(bwt ,ppbmi, momage, smoken) %>% 
+  add_residuals(model = mod) %>% 
+  add_predictions(model = mod) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = .4)
+```
+
+Another two models:
+
+* One using length at birth and gestational age as predictors (main effects only)
+
+* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+
+```{r}
+mod_1 = lm(bwt ~ blength + gaweeks, data = bwt_df)
+broom::tidy(mod_1)
+
+mod_2 = lm(bwt ~ bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = bwt_df)
+broom::tidy(mod_2)
+```
+
+Then I conduct cross validation. Firstly, split the dataset into train and test datasets.
+
+```{r}
+cv_df = crossv_mc(bwt_df, 100)
+```
+
+Fit models and obtain RMSE
+
+```{r}
+cv_df =
+cv_df %>% 
+  mutate(
+    linear_mod_1 = map(.x = train, ~lm(bwt ~ ppbmi + momage + smoken, data = .x)),
+    linear_mod_2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    linear_mod_3 = map(.x = train, ~lm(bwt ~ bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))
+  ) %>% 
+  mutate(
+    rmse_mod_1 = map2_dbl(.x = linear_mod_1, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_mod_2 = map2_dbl(.x = linear_mod_2, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_mod_3 = map2_dbl(.x = linear_mod_3, .y = test, ~rmse(model = .x, data = .y))
+    ) 
+  
+```
+  
+Make plots for comparison  
+  
+```{r}
+cv_df %>% 
+  select(starts_with("rmse_")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    names_prefix = "rmse_",
+    values_to = "rmse"
+  ) %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
 ```
 
