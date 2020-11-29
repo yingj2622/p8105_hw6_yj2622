@@ -9,6 +9,8 @@ output: github_document
 library(tidyverse)
 library(modelr)
 library(purrr)
+
+set.seed(1)
 ```
 
 ## Problem 1
@@ -107,9 +109,9 @@ bwt_df =
 bwt_data %>% 
   mutate(
     babysex = as.factor(babysex),
-    frace = as.factor(babysex),
-    malform = as.factor(babysex),
-    mrace = as.factor(babysex)
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
   )
 ```
 
@@ -122,13 +124,14 @@ bwt_df %>%
 
 There is no NAs in this dataset
 
-Then I try to build a linear model based on the dataset, which examines the association between baby birth weight and mother's pre-pregnancy BMI, age and average number of cigarettes she smokes per day during pregnancy.
+Then I try to build a linear model based on the dataset, which examines the association between baby birth weight and mother's  age, weight at delivery and average number of cigarettes she smokes per day during pregnancy.
 
 ```{r}
-mod = lm(bwt ~ ppbmi + momage + smoken, data = bwt_df)
+mod = lm(bwt ~ momage + smoken + delwt, data = bwt_df)
+broom::tidy(mod)
 
 bwt_df %>% 
-  select(bwt ,ppbmi, momage, smoken) %>% 
+  select(bwt, momage, smoken, delwt) %>% 
   add_residuals(model = mod) %>% 
   add_predictions(model = mod) %>% 
   ggplot(aes(x = pred, y = resid)) +
@@ -145,7 +148,7 @@ Another two models:
 mod_1 = lm(bwt ~ blength + gaweeks, data = bwt_df)
 broom::tidy(mod_1)
 
-mod_2 = lm(bwt ~ bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = bwt_df)
+mod_2 = lm(bwt ~ bhead*blength*babysex, data = bwt_df)
 broom::tidy(mod_2)
 ```
 
@@ -161,9 +164,9 @@ Fit models and obtain RMSE
 cv_df =
 cv_df %>% 
   mutate(
-    linear_mod_1 = map(.x = train, ~lm(bwt ~ ppbmi + momage + smoken, data = .x)),
+    linear_mod_1 = map(.x = train, ~lm(bwt ~ momage + smoken + delwt, data = .x)),
     linear_mod_2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
-    linear_mod_3 = map(.x = train, ~lm(bwt ~ bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))
+    linear_mod_3 = map(.x = train, ~lm(bwt ~  bhead*blength*babysex, data = .x))
   ) %>% 
   mutate(
     rmse_mod_1 = map2_dbl(.x = linear_mod_1, .y = test, ~rmse(model = .x, data = .y)),
@@ -189,3 +192,76 @@ cv_df %>%
   geom_violin()
 ```
 
+## Problem 3
+
+Import the dataset
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+Make plot of tmax vs. tmin
+
+```{r}
+weather_df %>% 
+  ggplot(aes(x = tmin, y = tmax)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+According to this plot, the points represetning lower t_min and t_max distributed more disperse around the fitted line.
+
+use `bootstrap` function to conduct repeated sampling and do analysis
+
+```{r}
+weather_boot_results =
+weather_df %>% 
+  modelr::bootstrap(n = 5000, id = "strap_number") %>% 
+  mutate(
+    models = map(.x = strap, ~lm(tmax ~ tmin, data = .x)),
+    results_glance = map(models, broom::glance),
+    results_tidy = map(models, broom::tidy)
+  ) %>% 
+  select(strap_number, results_glance, results_tidy) %>% 
+  unnest(results_glance, results_tidy) %>% 
+  select(strap_number, r.squared, term, estimate) %>% 
+  pivot_wider(
+    everything(),
+    names_from = term,
+    values_from = estimate
+  ) %>% 
+  mutate(
+    log_estimate_multi = log(`(Intercept)`*tmin)
+  ) %>% 
+  select(-`(Intercept)`, -tmin)
+```
+
+Make plot to see the distribution of r^2 
+
+```{r}
+weather_boot_results %>% 
+  ggplot(aes(x = r.squared)) +
+  geom_density()
+```
+
+From the plot above we can see that the distribution of r^2 is left-skewed. Combined with the plot of tmax vs. tmin, I think that's because some samples were drawn from points with lower t_min and t_max. These points have higher variance regrading the fitted line compared to other points. In this way, with bootstrap, the distribution of r^2 was fairly displayed.
+
+And make another plot to see the distribution of log(β_0∗β_1)
+
+```{r}
+weather_boot_results %>% 
+  ggplot(aes(x = log_estimate_multi)) +
+  geom_density()
+```
+
+Based on this plot, we can find that the distribution of log(β_0∗β_1) is also left-skewed. And the reason for it is the same as that for the distribution of r^2.
