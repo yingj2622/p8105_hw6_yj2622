@@ -259,9 +259,9 @@ weather_df %>%
   geom_smooth(method = "lm")
 ```
 
-According to this plot, the points represetning lower t_min and t_max distributed more disperse around the fitted line.
+According to this plot, the points representing lower t_min and lower t_max distributed more disperse around the fitted line.
 
-use `bootstrap` function to conduct repeated sampling and do analysis
+Use `bootstrap` function to conduct repeated sampling and do analysis
 
 ```{r}
 weather_boot_results =
@@ -294,7 +294,7 @@ weather_boot_results %>%
   geom_density()
 ```
 
-From the plot above we can see that the distribution of r^2 is a little left-skewed. Combined with the plot of tmax vs. tmin, I think that's because some samples were drawn from points with lower t_min and t_max. These points have higher variance regrading the fitted line compared to other points. In this way, with bootstrap, the distribution of r^2 was fairly displayed.
+From the plot above we can see that the distribution of r^2 is a little left-skewed. Combined with the plot of tmax vs. tmin, I think that's because some samples were drawn from points with lower t_min and lower t_max, which have larger residuals compared to other points. 
 
 And make another plot to see the distribution of log(β_0∗β_1)
 
@@ -319,6 +319,6 @@ weather_boot_results %>%
   summarise(
     CI_lower = quantile(estimate, 0.025),
     CI_upper = quantile(estimate, 0.975)
-  )
+  ) 
 ```
 
