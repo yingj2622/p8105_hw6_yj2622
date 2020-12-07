@@ -108,10 +108,33 @@ tidy dataset
 bwt_df = 
 bwt_data %>% 
   mutate(
-    babysex = as.factor(babysex),
-    frace = as.factor(frace),
-    malform = as.factor(malform),
-    mrace = as.factor(mrace)
+    babysex = factor(case_when(
+      babysex == 1 ~"male",
+      babysex == 2 ~"female")),
+    frace = factor(case_when(
+      frace == 1 ~"White",
+      frace == 2 ~"Black",
+      frace == 3 ~"Asian",
+      frace == 4 ~"Puerto Rican",
+      frace == 8 ~"Other",
+      frace == 9 ~"Unknown"
+    )),
+    malform = factor(case_when(
+      malform == 0 ~"absent",
+      malform == 1 ~"present"
+    )),
+    mrace = factor(case_when(
+      mrace == 1 ~"White",
+      mrace == 2 ~"Black",
+      mrace == 3 ~"Asian",
+      mrace == 4 ~"Puerto Rican",
+      mrace == 8 ~"Other"
+    ))
+  ) %>% 
+  mutate(
+    frace = fct_relevel(frace,"White", "Black", "Asian", "Puerto Rican", "Other"),
+    mrace = fct_relevel(mrace,"White", "Black", "Asian", "Puerto Rican"),
+    babysex = fct_relevel(babysex, "male")
   )
 ```
 
@@ -124,32 +147,47 @@ bwt_df %>%
 
 There is no NAs in this dataset
 
-Then I try to build a linear model based on the dataset, which examines the association between baby birth weight and mother's  age, weight at delivery and average number of cigarettes she smokes per day during pregnancy.
+Then I try to build a linear model based on the dataset. I concentrate on mom's influence on their babies, so I mainly focus on predictors related to mothers.
+
+A [study](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2974327/) shows there is consistent relationship between pregnancy weight gain and baby birth weight. Another [study](https://academic.oup.com/humrep/article/35/1/212/5713535) shows size at birth is strongly related to length of gestation. In addition, [a paper](https://www.nature.com/articles/pr2002265) reveals that maternal parity had a large influence on size at birth
+
+Based on findings above, I build a model which examines the association between baby birth weight and mother’s weight gain during pregnancy, gestational age in weeks, as well as number of live births prior to this pregnancy.
 
 ```{r}
-mod = lm(bwt ~ momage + smoken + delwt, data = bwt_df)
-broom::tidy(mod)
+mod = lm(bwt ~ wtgain + gaweeks + parity, data = bwt_df)
+
+broom::tidy(mod) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
 
 bwt_df %>% 
-  select(bwt, momage, smoken, delwt) %>% 
+  select(bwt, wtgain, gaweeks, parity) %>% 
   add_residuals(model = mod) %>% 
   add_predictions(model = mod) %>% 
   ggplot(aes(x = pred, y = resid)) +
-  geom_point(alpha = .4)
+  geom_point(alpha = .4) +
+  geom_smooth(method = "lm", se = F, color = "red")
+  
 ```
 
 Another two models:
 
 * One using length at birth and gestational age as predictors (main effects only)
 
-* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+* Another using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
 ```{r}
 mod_1 = lm(bwt ~ blength + gaweeks, data = bwt_df)
-broom::tidy(mod_1)
+
+broom::tidy(mod_1) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
 
 mod_2 = lm(bwt ~ bhead*blength*babysex, data = bwt_df)
-broom::tidy(mod_2)
+
+broom::tidy(mod_2) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
 ```
 
 Then I conduct cross validation. Firstly, split the dataset into train and test datasets.
@@ -164,7 +202,7 @@ Fit models and obtain RMSE
 cv_df =
 cv_df %>% 
   mutate(
-    linear_mod_1 = map(.x = train, ~lm(bwt ~ momage + smoken + delwt, data = .x)),
+    linear_mod_1 = map(.x = train, ~lm(bwt ~ wtgain + gaweeks + parity, data = .x)),
     linear_mod_2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
     linear_mod_3 = map(.x = train, ~lm(bwt ~  bhead*blength*babysex, data = .x))
   ) %>% 
@@ -191,6 +229,8 @@ cv_df %>%
   ggplot(aes(x = model, y = rmse)) +
   geom_violin()
 ```
+
+Based on th plot, model 3 has the lowest **RMSE** and model 1 has the highest **RMSE**.
 
 ## Problem 3
 
