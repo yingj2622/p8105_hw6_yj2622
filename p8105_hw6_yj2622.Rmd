@@ -291,7 +291,11 @@ Make plot to see the distribution of r^2
 ```{r}
 weather_boot_results %>% 
   ggplot(aes(x = r.squared)) +
-  geom_density()
+  geom_density() +
+  labs(
+    x = "r-square",
+    title = "Distribution of R-Square"
+  )
 ```
 
 From the plot above we can see that the distribution of r^2 is a little left-skewed. Combined with the plot of tmax vs. tmin, I think that's because some samples were drawn from points with lower t_min and lower t_max, which have larger residuals compared to other points. 
@@ -301,7 +305,11 @@ And make another plot to see the distribution of log(β_0∗β_1)
 ```{r}
 weather_boot_results %>% 
   ggplot(aes(x = log_estimate_multi)) +
-  geom_density()
+  geom_density() +
+  labs(
+    x = "log(β_0 \* β_1)",
+    title = "Distribution of Log(β_0 \* β_1)"
+  )
 ```
 
 Based on this plot, we can find that the distribution of log(β_0∗β_1) is also a little left-skewed. And the reason for it is the same as that for the distribution of r^2.
@@ -322,3 +330,4 @@ weather_boot_results %>%
   ) 
 ```
 
+The 95% CI for r^2 is (0.894, 0.927) and log(β_0∗β_1) is (1.97, 2.06).
